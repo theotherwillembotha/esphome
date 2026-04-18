@@ -14,6 +14,7 @@ class PylontechListener {
  public:
   struct LineContents {
     int bat_num = 0, volt, curr, tempr, tlow, thigh, vlow, vhigh, coulomb, mostempr;
+    bool has_mostempr = false;
     char base_st[TEXT_SENSOR_MAX_LEN] = {0}, volt_st[TEXT_SENSOR_MAX_LEN] = {0}, curr_st[TEXT_SENSOR_MAX_LEN] = {0},
          temp_st[TEXT_SENSOR_MAX_LEN] = {0};
   };

@@ -53,7 +53,7 @@ void PylontechSensor::on_line_read(PylontechListener::LineContents *line) {
   if (this->coulomb_sensor_ != nullptr) {
     this->coulomb_sensor_->publish_state(line->coulomb);
   }
-  if (this->mos_temperature_sensor_ != nullptr) {
+  if (this->mos_temperature_sensor_ != nullptr && line->has_mostempr) {
     this->mos_temperature_sensor_->publish_state(((float) line->mostempr) / 1000.0f);
   }
 }

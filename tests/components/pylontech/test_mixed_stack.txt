@@ -1,0 +1,16 @@
+pwr
+@
+
+Power Volt   Curr   Tempr  Tlow   Thigh  Vlow   Vhigh  Base.St  Volt.St  Curr.St  Temp.St  Coulomb  Time                 B.V.St   B.T.St   MosTempr M.T.St
+1     49871  6950   32600  29900  30300  3324   3325   Charge   Normal   Normal   Normal   54%      2026-04-18 07:20:49  Normal   Normal  30200    Normal
+2     49835  6532   31900  29600  29700  3322   3323   Charge   Normal   Normal   Normal   51%      2026-04-18 07:20:47  Normal   Normal  30600    Normal
+3     49877  5536   30000  29000  29000  3323   3327   Charge   Normal   Normal   Normal   39%      2026-04-18 07:20:46  Normal   Normal  -        -
+4     49842  4027   30000  28000  28000  3320   3331   Charge   Normal   Normal   Normal   23%      2026-04-18 07:20:46  Normal   Normal  -        -
+5     49816  4814   30000  27000  28000  3320   3323   Charge   Normal   Normal   Normal   39%      2026-04-18 07:20:47  Normal   Normal  -        -
+6     49919  6089   29000  28000  28000  3326   3338   Charge   Normal   Normal   Normal   27%      2026-04-18 07:20:47  Normal   Normal  -        -
+7     49893  5486   29000  27000  28000  3323   3343   Charge   Normal   Normal   Normal   26%      2026-04-18 07:20:47  Normal   Normal  -        -
+8     49962  6646   28000  26000  27000  3328   3332   Charge   Normal   Normal   Normal   50%      2026-04-18 07:20:47  Normal   Normal  -        -
+9     -      -      -      -      -      -      -      Absent   -        -        -        -        -                    -        -
+Command completed successfully
+$$
+pylon>

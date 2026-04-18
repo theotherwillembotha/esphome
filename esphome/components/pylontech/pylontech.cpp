@@ -189,7 +189,22 @@ void PylontechComponent::process_line_(std::string &buffer) {
   get_token(token_buf);  // Skip Time
   get_token(token_buf);  // Skip B.V.St
   get_token(token_buf);  // Skip B.T.St
-  PARSE_INT(l.mostempr, "Mostempr");
+
+  {
+    get_token(token_buf);
+    ESP_LOGD(TAG, "mostempr token='%s' len=%d bat=%d", token_buf, strlen(token_buf), l.bat_num);
+    if (strlen(token_buf) > 0 && strcmp(token_buf, "-") != 0) {
+      auto val = parse_number<int>(token_buf);
+      if (val.has_value()) {
+        l.mostempr = val.value();
+        l.has_mostempr = true;
+      } else {
+        ESP_LOGD(TAG, "invalid Mostempr in line %s", buffer.substr(0, buffer.size() - 2).c_str());
+      }
+    } else {
+      ESP_LOGD(TAG, "bat_num %d: received no mostempr", l.bat_num);
+    }
+  }
 
   ESP_LOGD(TAG, "successful line %s", buffer.substr(0, buffer.size() - 2).c_str());
 
