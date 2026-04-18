@@ -1,5 +1,4 @@
 #pragma once
-
 #include "esphome/core/component.h"
 #include "esphome/core/defines.h"
 #include "esphome/components/uart/uart.h"
@@ -7,7 +6,6 @@
 namespace esphome {
 namespace pylontech {
 
-static const uint8_t NUM_BUFFERS = 20;
 static const uint8_t TEXT_SENSOR_MAX_LEN = 14;
 
 class PylontechListener {
@@ -15,10 +13,9 @@ class PylontechListener {
   struct LineContents {
     int bat_num = 0, volt, curr, tempr, tlow, thigh, vlow, vhigh, coulomb, mostempr;
     bool has_mostempr = false;
-    char base_st[TEXT_SENSOR_MAX_LEN] = {0}, volt_st[TEXT_SENSOR_MAX_LEN] = {0}, curr_st[TEXT_SENSOR_MAX_LEN] = {0},
-         temp_st[TEXT_SENSOR_MAX_LEN] = {0};
+    char base_st[TEXT_SENSOR_MAX_LEN] = {0}, volt_st[TEXT_SENSOR_MAX_LEN] = {0},
+         curr_st[TEXT_SENSOR_MAX_LEN] = {0}, temp_st[TEXT_SENSOR_MAX_LEN] = {0};
   };
-
   virtual void on_line_read(LineContents *line);
   virtual void dump_config();
 };
@@ -26,26 +23,19 @@ class PylontechListener {
 class PylontechComponent : public PollingComponent, public uart::UARTDevice {
  public:
   PylontechComponent();
-
-  /// Schedule data readings.
   void update() override;
-  /// Read data once available
   void loop() override;
-  /// Setup the sensor and test for a connection.
   void setup() override;
   void dump_config() override;
-
   void register_listener(PylontechListener *listener) { this->listeners_.push_back(listener); }
 
  protected:
+  void parse_response_();
   void process_line_(std::string &buffer);
 
-  // ring buffer
-  std::string buffer_[NUM_BUFFERS];
-  int buffer_index_write_ = 0;
-  int buffer_index_read_ = 0;
-  bool has_tlow_id_ = false;
-
+  std::string rx_buffer_;
+  bool response_complete_{false};
+  bool has_tlow_id_{false};
   std::vector<PylontechListener *> listeners_{};
 };
 
