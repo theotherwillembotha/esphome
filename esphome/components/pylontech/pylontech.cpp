@@ -28,7 +28,7 @@ namespace esphome {
 namespace pylontech {
 
 static const char *const TAG = "pylontech";
-static const int MAX_DATA_LENGTH_BYTES = 256;
+static const int MAX_DATA_LENGTH_BYTES = 384;
 static const uint8_t ASCII_LF = 0x0A;
 
 PylontechComponent::PylontechComponent() {}
@@ -192,7 +192,6 @@ void PylontechComponent::process_line_(std::string &buffer) {
 
   {
     get_token(token_buf);
-    ESP_LOGD(TAG, "mostempr token='%s' len=%d bat=%d", token_buf, strlen(token_buf), l.bat_num);
     if (strlen(token_buf) > 0 && strcmp(token_buf, "-") != 0) {
       auto val = parse_number<int>(token_buf);
       if (val.has_value()) {
