@@ -27,11 +27,16 @@ void DscProtocol::encode(RemoteTransmitData *dst, const DscData &data) {
 }
 
 optional<DscData> DscProtocol::decode(RemoteReceiveData src) {
-  // Expect the preamble: ≥ 2000 µs of continuous mark
-  if (!src.peek_mark_at_least(DSC_PREAMBLE_MIN_US)) {
+  // Scan for the preamble (≥ 2000 µs mark). OOK RF receivers often capture
+  // spurious noise before the actual packet starts, so the preamble may not
+  // be the very first element in the buffer.
+  while (src.is_valid() && !src.peek_mark_at_least(DSC_PREAMBLE_MIN_US)) {
+    src.advance();
+  }
+  if (!src.is_valid()) {
     return {};
   }
-  src.advance();
+  src.advance();  // skip the preamble mark itself
 
   // Auto-detect timing variant from the first space following the preamble.
   // Standard first space ≈ 250 µs (half a bit period); WS4945 ≈ 536 µs.
