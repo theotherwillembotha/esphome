@@ -112,6 +112,7 @@ optional<DscData> DscProtocol::decode(RemoteReceiveData src) {
 
   // At minimum the sync bit at stream position 39 must have been received
   if (bit_pos < 40) {
+    ESP_LOGD(TAG, "DSC: only %d/48 bits decoded (idle too short? packet split?)", bit_pos);
     return {};
   }
 
@@ -127,7 +128,7 @@ optional<DscData> DscProtocol::decode(RemoteReceiveData src) {
   //   Bit 39     : sync '1'                (raw[4] bit 0)
   //   Bits 40-47 : CRC byte
   if (!(raw[0] & 0xF0) || !(raw[1] & 0x08) || !(raw[2] & 0x04) || !(raw[3] & 0x02) || !(raw[4] & 0x01)) {
-    ESP_LOGV(TAG, "DSC sync check failed: %02X %02X %02X %02X %02X", raw[0], raw[1], raw[2], raw[3], raw[4]);
+    ESP_LOGD(TAG, "DSC sync check failed: %02X %02X %02X %02X %02X", raw[0], raw[1], raw[2], raw[3], raw[4]);
     return {};
   }
 
@@ -139,10 +140,15 @@ optional<DscData> DscProtocol::decode(RemoteReceiveData src) {
   bytes[3] = static_cast<uint8_t>(((raw[3] & 0x01) << 7) | ((raw[4] & 0xFE) >> 1));
   bytes[4] = raw[5];
 
+  // Reject all-FF data (false positive from constant-high noise)
+  if (bytes[0] == 0xFF && bytes[1] == 0xFF && bytes[2] == 0xFF && bytes[3] == 0xFF) {
+    return {};
+  }
+
   // CRC-8: polynomial 0xF5, initial value 0x3D, LSB-first.
   // Including the CRC byte itself, a valid packet returns 0.
   if (esphome::crc8(bytes, 5, 0x3D, 0xF5) != 0) {
-    ESP_LOGV(TAG, "DSC CRC failed: ESN=%06" PRIX32 " status=%02X CRC=%02X",
+    ESP_LOGD(TAG, "DSC CRC failed: ESN=%06" PRIX32 " status=%02X CRC=%02X",
              static_cast<uint32_t>((bytes[1] << 16) | (bytes[2] << 8) | bytes[3]), bytes[0], bytes[4]);
     return {};
   }
