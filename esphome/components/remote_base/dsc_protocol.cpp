@@ -154,9 +154,11 @@ optional<DscData> DscProtocol::decode(RemoteReceiveData src) {
       continue;
     }
 
-    // CRC-8: polynomial 0xF5, initial value 0x3D, LSB-first.
+    // CRC-8: polynomial 0xF5, initial value 0x3D, LSB-first (reflected).
+    // rtl433's crc8le reflects both init and poly before use, so we pass
+    // reverse8(0x3D)=0xBC and reverse8(0xF5)=0xAF to esphome::crc8.
     // Including the CRC byte itself, a valid packet returns 0.
-    if (esphome::crc8(bytes, 5, 0x3D, 0xF5) != 0) {
+    if (esphome::crc8(bytes, 5, 0xBC, 0xAF) != 0) {
       ESP_LOGD(TAG, "DSC CRC failed: ESN=%06" PRIX32 " status=%02X CRC=%02X",
                static_cast<uint32_t>((bytes[1] << 16) | (bytes[2] << 8) | bytes[3]), bytes[0], bytes[4]);
       continue;
