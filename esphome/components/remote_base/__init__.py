@@ -1302,6 +1302,43 @@ async def drayton_action(var, config, args):
     cg.add(var.set_command(template_))
 
 
+# DSC
+(
+    DscData,
+    DscBinarySensor,
+    DscTrigger,
+    DscAction,
+    DscDumper,
+) = declare_protocol("Dsc")
+DSC_SCHEMA = cv.Schema(
+    {
+        cv.Required(CONF_ADDRESS): cv.All(cv.hex_int, cv.Range(min=0, max=0xFFFFFF)),
+    }
+)
+
+
+@register_binary_sensor("dsc", DscBinarySensor, DSC_SCHEMA)
+def dsc_binary_sensor(var, config):
+    cg.add(
+        var.set_data(
+            cg.StructInitializer(
+                DscData,
+                ("address", config[CONF_ADDRESS]),
+            )
+        )
+    )
+
+
+@register_trigger("dsc", DscTrigger, DscData)
+def dsc_trigger(var, config):
+    pass
+
+
+@register_dumper("dsc", DscDumper)
+def dsc_dumper(var, config):
+    pass
+
+
 # RC5
 RC5Data, RC5BinarySensor, RC5Trigger, RC5Action, RC5Dumper = declare_protocol("RC5")
 RC5_SCHEMA = cv.Schema(
