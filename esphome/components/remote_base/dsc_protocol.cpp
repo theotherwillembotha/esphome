@@ -30,7 +30,11 @@ optional<DscData> DscProtocol::decode(RemoteReceiveData src) {
   // Scan for the preamble (≥ 2000 µs mark). OOK RF receivers often capture
   // spurious noise before the actual packet starts, so the preamble may not
   // be the very first element in the buffer.
-  while (src.is_valid() && !src.peek_mark_at_least(DSC_PREAMBLE_MIN_US)) {
+  //
+  // Use a direct comparison (not peek_mark_at_least) so that tolerance is NOT
+  // applied — otherwise a noise mark near the threshold (e.g. 1779 µs) would
+  // satisfy lower_bound_(2000) = 1500 µs and be mistaken for a preamble.
+  while (src.is_valid() && src.peek() < static_cast<int32_t>(DSC_PREAMBLE_MIN_US)) {
     src.advance();
   }
   if (!src.is_valid()) {
