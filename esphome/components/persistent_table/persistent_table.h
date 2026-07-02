@@ -38,6 +38,35 @@ inline void write_json_string(AsyncResponseStream *response, const char *str) {
   response->print("\"");
 }
 
+// ---------------------------------------------------------------------------
+// TablesIndexHandler — singleton, serves /tables listing all registered tables.
+// Registered once (on the first table's setup) via global_web_server_base.
+// ---------------------------------------------------------------------------
+class TablesIndexHandler : public AsyncWebHandler {
+ public:
+  static TablesIndexHandler &instance() {
+    static TablesIndexHandler inst;
+    return inst;
+  }
+
+  void register_table(const char *table_id) { this->table_ids_.push_back(table_id); }
+  bool is_registered() const { return this->registered_; }
+  void mark_registered() { this->registered_ = true; }
+
+  bool canHandle(AsyncWebServerRequest *request) const override {
+    char url_buf[AsyncWebServerRequest::URL_BUF_SIZE];
+    request->url_to(url_buf);
+    return strcmp(url_buf, "/tables") == 0;
+  }
+
+  void handleRequest(AsyncWebServerRequest *request) override;
+
+ private:
+  TablesIndexHandler() = default;
+  std::vector<const char *> table_ids_;
+  bool registered_{false};
+};
+
 }  // namespace persistent_table
 }  // namespace esphome
 
@@ -95,6 +124,8 @@ class PersistentTableBase : public Component
   virtual void rest_get_all_(AsyncWebServerRequest *request) = 0;
   virtual bool rest_post_body_(const char *json_body) = 0;
   virtual bool rest_delete_key_(const char *key_str) = 0;
+  // Returns a pointer to the compile-time HTML UI page (stored in flash).
+  virtual const char *get_ui_html_() const = 0;
 
   // Body accumulation buffer — the IDF web server has no _tempObject on the
   // request, so we store the POST body here instead.  Single-threaded HTTP

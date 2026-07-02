@@ -313,6 +313,178 @@ class {class_name}{event}Trigger : public esphome::Trigger<const {struct_name} &
 
 
 # ---------------------------------------------------------------------------
+# Web UI generation
+# ---------------------------------------------------------------------------
+
+# Placeholders replaced by Python — using unique tokens avoids all f-string
+# escaping issues with CSS/JS curly braces.
+_UI_HTML_TEMPLATE = (
+    '<!DOCTYPE html><html><head>'
+    '<meta charset="utf-8">'
+    '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    '<title>Table: ___TID___</title>'
+    '<style>'
+    'body{font-family:sans-serif;max-width:960px;margin:0 auto;padding:16px}'
+    'nav{margin-bottom:8px}nav a{color:#2196F3;text-decoration:none;font-size:.9em}'
+    'h1{margin:4px 0 12px}'
+    'table{width:100%;border-collapse:collapse;margin-top:8px}'
+    'th,td{padding:8px 10px;border:1px solid #ddd;text-align:left}'
+    'th{background:#f5f5f5}tr:hover>td{background:#fafafa}'
+    '.btn{padding:6px 12px;cursor:pointer;border:none;border-radius:4px;font-size:.85em}'
+    '.bp{background:#2196F3;color:#fff}.bp:hover{background:#1976D2}'
+    '.bd{background:#f44336;color:#fff}.bd:hover{background:#c62828}'
+    '.bs{padding:3px 9px}'
+    '.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9}'
+    '.modal.open{display:flex;align-items:center;justify-content:center}'
+    '.box{background:#fff;padding:20px;border-radius:8px;width:min(400px,92vw)}'
+    '.box h2{margin:0 0 12px}'
+    '.st{margin:6px 0;padding:7px 10px;border-radius:4px;display:none}'
+    '.ok{display:block;background:#e8f5e9;color:#2e7d32}'
+    '.er{display:block;background:#ffebee;color:#c62828}'
+    '#ct{color:#888;font-size:.85em;margin:4px 0}'
+    '</style></head><body>'
+    '<nav><a href="/tables">&#8592; All Tables</a></nav>'
+    '<h1>Table: ___TID___</h1>'
+    '<div id="st" class="st"></div>'
+    '<div style="display:flex;gap:8px;margin-bottom:4px">'
+    '<button class="btn bp" onclick="openAdd()">+ Add Row</button>'
+    '<button class="btn" onclick="load()">&#8635; Refresh</button>'
+    '</div>'
+    '<p id="ct"></p>'
+    '<div style="overflow-x:auto">'
+    '<table><thead><tr id="hd"></tr></thead><tbody id="tb"></tbody></table>'
+    '</div>'
+    '<div class="modal" id="md"><div class="box">'
+    '<h2 id="mt">Add Row</h2>'
+    '<form id="fm" onsubmit="save(event)">'
+    '___FORM___'
+    '<div style="margin-top:16px;display:flex;gap:8px">'
+    '<button type="submit" class="btn bp">Save</button>'
+    '<button type="button" class="btn" onclick="close_()">Cancel</button>'
+    '</div></form></div></div>'
+    '<script>'
+    'var S=___SCHEMA___;'
+    'var K=S.find(function(c){return c.key;});'
+    '(function(){'
+    'var h=document.getElementById("hd");'
+    'S.forEach(function(c){var t=document.createElement("th");t.textContent=c.name;h.appendChild(t);});'
+    'var t=document.createElement("th");t.textContent="";h.appendChild(t);'
+    '})();'
+    'function load(){'
+    'fetch("/api/table/___TID___").then(function(r){return r.json();}).then(function(rows){'
+    'var b=document.getElementById("tb");b.innerHTML="";'
+    'rows.forEach(function(row){'
+    'var tr=document.createElement("tr");'
+    'S.forEach(function(c){'
+    'var td=document.createElement("td");'
+    'td.textContent=c.type==="bool"?(row[c.name]?"true":"false"):row[c.name];'
+    'tr.appendChild(td);});'
+    'var td=document.createElement("td");td.style.whiteSpace="nowrap";'
+    'var e=document.createElement("button");e.className="btn bs";e.textContent="Edit";'
+    'e.onclick=(function(r){return function(){edit(r);};})(row);'
+    'var d=document.createElement("button");d.className="btn bs bd";d.textContent="Del";d.style.marginLeft="4px";'
+    'd.onclick=(function(k){return function(){del(k);};})(row[K.name]);'
+    'td.appendChild(e);td.appendChild(d);tr.appendChild(td);b.appendChild(tr);'
+    '});'
+    'document.getElementById("ct").textContent=rows.length+" row(s)";'
+    '}).catch(function(e){st("Load failed: "+e,0);});'
+    '}'
+    'function openAdd(){'
+    'document.getElementById("mt").textContent="Add Row";'
+    'document.getElementById("fm").reset();'
+    'S.forEach(function(c){var e=document.getElementById("f_"+c.name);if(e)e.removeAttribute("readonly");});'
+    'document.getElementById("md").classList.add("open");'
+    '}'
+    'function edit(row){'
+    'document.getElementById("mt").textContent="Edit Row";'
+    'S.forEach(function(c){'
+    'var e=document.getElementById("f_"+c.name);if(!e)return;'
+    'if(c.type==="bool")e.checked=row[c.name];else e.value=row[c.name];'
+    'if(c.key)e.setAttribute("readonly","readonly");else e.removeAttribute("readonly");'
+    '});'
+    'document.getElementById("md").classList.add("open");'
+    '}'
+    'function close_(){document.getElementById("md").classList.remove("open");}'
+    'function save(e){'
+    'e.preventDefault();var b={};'
+    'S.forEach(function(c){'
+    'var el=document.getElementById("f_"+c.name);if(!el)return;'
+    'if(c.type==="bool")b[c.name]=el.checked;'
+    'else if(c.type==="float")b[c.name]=parseFloat(el.value);'
+    'else if(c.type==="string")b[c.name]=el.value;'
+    'else b[c.name]=parseInt(el.value,10);'
+    '});'
+    'fetch("/api/table/___TID___",{method:"POST",'
+    'headers:{"Content-Type":"application/json"},body:JSON.stringify(b)})'
+    '.then(function(r){'
+    'if(r.ok){close_();load();st("Saved",1);}'
+    'else r.text().then(function(t){st("Error: "+t,0);});'
+    '});'
+    '}'
+    'function del(key){'
+    'if(!confirm("Delete "+key+"?"))return;'
+    'fetch("/api/table/___TID___/"+key,{method:"DELETE"})'
+    '.then(function(r){if(r.ok){load();st("Deleted",1);}else st("Delete failed",0);});'
+    '}'
+    'function st(m,ok){'
+    'var e=document.getElementById("st");e.textContent=m;'
+    'e.className="st "+(ok?"ok":"er");'
+    'setTimeout(function(){e.className="st";},4000);'
+    '}'
+    'load();'
+    '</script></body></html>'
+)
+
+
+def _generate_form_fields(columns: list) -> str:
+    s = 'style="width:100%;padding:6px;box-sizing:border-box;margin-top:4px"'
+    ls = 'style="display:block;margin-top:12px;font-size:.9em"'
+    parts = []
+    for col in columns:
+        name = col[CONF_NAME]
+        col_type = col["type"]
+        if col_type == "bool":
+            parts.append(
+                f'<label style="display:flex;gap:8px;align-items:center;margin-top:12px">'
+                f'<input type="checkbox" id="f_{name}"> {name}</label>'
+            )
+        elif col_type == "string":
+            parts.append(
+                f'<label {ls}>{name}'
+                f'<input type="text" id="f_{name}" maxlength="{col[CONF_MAX_LENGTH]}" {s}></label>'
+            )
+        elif col_type == "float":
+            parts.append(
+                f'<label {ls}>{name}'
+                f'<input type="number" id="f_{name}" step="any" {s}></label>'
+            )
+        else:
+            parts.append(
+                f'<label {ls}>{name}'
+                f'<input type="number" id="f_{name}" step="1" {s}></label>'
+            )
+    return "".join(parts)
+
+
+def _generate_ui_html(table_id_str: str, columns: list) -> str:
+    """Return a C++ raw string literal containing the complete HTML UI page."""
+    import json
+
+    schema = [
+        {"name": c[CONF_NAME], "type": c["type"], "key": c.get(CONF_KEY, False)}
+        for c in columns
+    ]
+    content = (
+        _UI_HTML_TEMPLATE.replace("___TID___", table_id_str)
+        .replace("___SCHEMA___", json.dumps(schema))
+        .replace("___FORM___", _generate_form_fields(columns))
+    )
+    # Wrap in a C++ raw string literal — delimiter UIHTML avoids any conflict
+    # with the page content.
+    return 'R"UIHTML(' + content + ')UIHTML"'
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -342,6 +514,7 @@ struct {struct_name} {{
     rest_section = ""
     if rest_api:
         cg.add_define("USE_PERSISTENT_TABLE_REST")
+        ui_html = _generate_ui_html(table_id_str, columns)
         rest_section = f"""
 #ifdef USE_PERSISTENT_TABLE_REST
   // REST: GET /api/table/{table_id_str}
@@ -350,6 +523,11 @@ struct {struct_name} {{
 {_generate_rest_post(struct_name, columns)}
   // REST: DELETE /api/table/{table_id_str}/{{key}}
 {_generate_rest_delete(key_col)}
+  // UI: GET /table/{table_id_str}  — HTML editor page stored in flash
+  const char *get_ui_html_() const override {{
+    static const char HTML[] = {ui_html};
+    return HTML;
+  }}
 #endif  // USE_PERSISTENT_TABLE_REST"""
 
     # ---- Full typed table class --------------------------------------------

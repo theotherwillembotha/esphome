@@ -48,10 +48,18 @@ void PersistentTableBase::setup() {
 
 #ifdef USE_PERSISTENT_TABLE_REST
   if (web_server_base::global_web_server_base != nullptr) {
+    // Register the singleton index handler the first time any table sets up.
+    auto &index = TablesIndexHandler::instance();
+    index.register_table(this->table_id_);
+    if (!index.is_registered()) {
+      index.mark_registered();
+      web_server_base::global_web_server_base->add_handler(&index);
+    }
     web_server_base::global_web_server_base->add_handler(this);
-    ESP_LOGD(TAG, "Table '%s': REST API registered at /api/table/%s", this->table_id_, this->table_id_);
+    ESP_LOGD(TAG, "Table '%s': REST /api/table/%s  UI /table/%s", this->table_id_, this->table_id_,
+             this->table_id_);
   } else {
-    ESP_LOGW(TAG, "Table '%s': web_server_base not available, REST API disabled", this->table_id_);
+    ESP_LOGW(TAG, "Table '%s': web_server_base not available, REST/UI disabled", this->table_id_);
   }
 #endif
 }
@@ -159,24 +167,44 @@ void PersistentTableBase::save_bitmap_() {
 #ifdef USE_PERSISTENT_TABLE_REST
 
 bool PersistentTableBase::canHandle(AsyncWebServerRequest *request) const {
-  // Match /api/table/{table_id} or /api/table/{table_id}/{key}
   char url_buf[AsyncWebServerRequest::URL_BUF_SIZE];
   request->url_to(url_buf);
-  static const char PREFIX[] = "/api/table/";
-  static const size_t PREFIX_LEN = sizeof(PREFIX) - 1;
-  if (strncmp(url_buf, PREFIX, PREFIX_LEN) != 0)
-    return false;
-  const char *after = url_buf + PREFIX_LEN;
   size_t id_len = strlen(this->table_id_);
-  if (strncmp(after, this->table_id_, id_len) != 0)
-    return false;
-  char next = after[id_len];
-  return next == '\0' || next == '/';
+
+  // Match /api/table/{id}  or  /api/table/{id}/{key}
+  static const char API[] = "/api/table/";
+  static const size_t API_LEN = sizeof(API) - 1;
+  if (strncmp(url_buf, API, API_LEN) == 0) {
+    const char *after = url_buf + API_LEN;
+    if (strncmp(after, this->table_id_, id_len) == 0) {
+      char next = after[id_len];
+      return next == '\0' || next == '/';
+    }
+  }
+
+  // Match /table/{id}  (UI editor)
+  static const char UI[] = "/table/";
+  static const size_t UI_LEN = sizeof(UI) - 1;
+  if (strncmp(url_buf, UI, UI_LEN) == 0) {
+    const char *after = url_buf + UI_LEN;
+    return strncmp(after, this->table_id_, id_len) == 0 && after[id_len] == '\0';
+  }
+
+  return false;
 }
 
 void PersistentTableBase::handleRequest(AsyncWebServerRequest *request) {
   char url_buf[AsyncWebServerRequest::URL_BUF_SIZE];
   request->url_to(url_buf);
+
+  // Serve the HTML editor for /table/{id}
+  static const char UI[] = "/table/";
+  static const size_t UI_LEN = sizeof(UI) - 1;
+  if (strncmp(url_buf, UI, UI_LEN) == 0) {
+    request->send(200, "text/html", this->get_ui_html_());
+    return;
+  }
+
   static const char PREFIX[] = "/api/table/";
   static const size_t PREFIX_LEN = sizeof(PREFIX) - 1;
   const char *after_id = url_buf + PREFIX_LEN + strlen(this->table_id_);
@@ -225,6 +253,42 @@ void PersistentTableBase::handleBody(AsyncWebServerRequest *request, uint8_t *da
     this->body_buf_.reserve(total);
   }
   this->body_buf_.append(reinterpret_cast<const char *>(data), len);
+}
+
+// ---------------------------------------------------------------------------
+// TablesIndexHandler — /tables discovery page
+// ---------------------------------------------------------------------------
+
+void TablesIndexHandler::handleRequest(AsyncWebServerRequest *request) {
+  auto *resp = request->beginResponseStream("text/html");
+  resp->print(
+      "<!DOCTYPE html><html><head>"
+      "<meta charset=\"utf-8\">"
+      "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+      "<title>ESPHome Tables</title>"
+      "<style>"
+      "body{font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px}"
+      "h1{color:#333;margin-bottom:4px}"
+      "p{color:#666;margin-bottom:20px}"
+      "ul{list-style:none;padding:0}"
+      "li{margin:10px 0}"
+      "a{display:inline-block;padding:10px 20px;background:#2196F3;color:#fff;"
+      "text-decoration:none;border-radius:6px;font-size:.95em}"
+      "a:hover{background:#1976D2}"
+      ".foot{margin-top:32px;font-size:.8em;color:#aaa}"
+      "</style></head><body>"
+      "<h1>&#128204; Persistent Tables</h1>"
+      "<p>Select a table to view or edit its contents:</p>"
+      "<ul>");
+  for (const char *id : this->table_ids_) {
+    resp->printf("<li><a href=\"/table/%s\">%s</a></li>", id, id);
+  }
+  resp->print(
+      "</ul>"
+      "<p class=\"foot\">ESPHome persistent_table &mdash; "
+      "REST API at <code>/api/table/{id}</code></p>"
+      "</body></html>");
+  request->send(resp);
 }
 
 #endif  // USE_PERSISTENT_TABLE_REST
