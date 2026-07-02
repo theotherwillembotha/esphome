@@ -10,39 +10,32 @@
 
 #ifdef USE_PERSISTENT_TABLE_REST
 #include "esphome/components/web_server_base/web_server_base.h"
+#include <ArduinoJson.h>
 
 namespace esphome {
 namespace persistent_table {
 
 // Write a JSON-encoded string to the response stream, including surrounding quotes.
 // Escapes double-quote, backslash, and common control characters.
+// Uses only print(const char *) for cross-platform compatibility with both the
+// Arduino and ESP-IDF AsyncResponseStream implementations.
 inline void write_json_string(AsyncResponseStream *response, const char *str) {
-  response->print('"');
+  response->print("\"");
+  char buf[2] = {'\0', '\0'};
   for (const char *p = str; *p != '\0'; p++) {
     switch (*p) {
-      case '"':
-      case '\\':
-        response->print('\\');
-        response->print(*p);
-        break;
-      case '\n':
-        response->print('\\');
-        response->print('n');
-        break;
-      case '\r':
-        response->print('\\');
-        response->print('r');
-        break;
-      case '\t':
-        response->print('\\');
-        response->print('t');
-        break;
+      case '"':  response->print("\\\""); break;
+      case '\\': response->print("\\\\"); break;
+      case '\n': response->print("\\n");  break;
+      case '\r': response->print("\\r");  break;
+      case '\t': response->print("\\t");  break;
       default:
-        response->print(*p);
+        buf[0] = *p;
+        response->print(buf);
         break;
     }
   }
-  response->print('"');
+  response->print("\"");
 }
 
 }  // namespace persistent_table
@@ -102,6 +95,11 @@ class PersistentTableBase : public Component
   virtual void rest_get_all_(AsyncWebServerRequest *request) = 0;
   virtual bool rest_post_body_(const char *json_body) = 0;
   virtual bool rest_delete_key_(const char *key_str) = 0;
+
+  // Body accumulation buffer — the IDF web server has no _tempObject on the
+  // request, so we store the POST body here instead.  Single-threaded HTTP
+  // handling on ESP32 makes this safe.
+  std::string body_buf_;
 #endif
 };
 

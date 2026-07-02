@@ -160,12 +160,13 @@ void PersistentTableBase::save_bitmap_() {
 
 bool PersistentTableBase::canHandle(AsyncWebServerRequest *request) const {
   // Match /api/table/{table_id} or /api/table/{table_id}/{key}
-  const char *url = request->url().c_str();
+  char url_buf[AsyncWebServerRequest::URL_BUF_SIZE];
+  request->url_to(url_buf);
   static const char PREFIX[] = "/api/table/";
   static const size_t PREFIX_LEN = sizeof(PREFIX) - 1;
-  if (strncmp(url, PREFIX, PREFIX_LEN) != 0)
+  if (strncmp(url_buf, PREFIX, PREFIX_LEN) != 0)
     return false;
-  const char *after = url + PREFIX_LEN;
+  const char *after = url_buf + PREFIX_LEN;
   size_t id_len = strlen(this->table_id_);
   if (strncmp(after, this->table_id_, id_len) != 0)
     return false;
@@ -174,10 +175,11 @@ bool PersistentTableBase::canHandle(AsyncWebServerRequest *request) const {
 }
 
 void PersistentTableBase::handleRequest(AsyncWebServerRequest *request) {
-  const char *url = request->url().c_str();
+  char url_buf[AsyncWebServerRequest::URL_BUF_SIZE];
+  request->url_to(url_buf);
   static const char PREFIX[] = "/api/table/";
   static const size_t PREFIX_LEN = sizeof(PREFIX) - 1;
-  const char *after_id = url + PREFIX_LEN + strlen(this->table_id_);
+  const char *after_id = url_buf + PREFIX_LEN + strlen(this->table_id_);
 
   switch (request->method()) {
     case HTTP_GET:
@@ -185,12 +187,8 @@ void PersistentTableBase::handleRequest(AsyncWebServerRequest *request) {
       break;
 
     case HTTP_POST: {
-      const char *body = (request->_tempObject != nullptr) ? static_cast<const char *>(request->_tempObject) : "";
-      bool ok = this->rest_post_body_(body);
-      if (request->_tempObject != nullptr) {
-        delete[] static_cast<char *>(request->_tempObject);
-        request->_tempObject = nullptr;
-      }
+      bool ok = this->rest_post_body_(this->body_buf_.c_str());
+      this->body_buf_.clear();
       if (ok) {
         request->send(200, "application/json", "{\"status\":\"ok\"}");
       } else {
@@ -223,14 +221,10 @@ void PersistentTableBase::handleBody(AsyncWebServerRequest *request, uint8_t *da
   if (total == 0)
     return;
   if (index == 0) {
-    request->_tempObject = new char[total + 1];
+    this->body_buf_.clear();
+    this->body_buf_.reserve(total);
   }
-  if (request->_tempObject != nullptr) {
-    memcpy(static_cast<char *>(request->_tempObject) + index, data, len);
-    if (index + len == total) {
-      static_cast<char *>(request->_tempObject)[total] = '\0';
-    }
-  }
+  this->body_buf_.append(reinterpret_cast<const char *>(data), len);
 }
 
 #endif  // USE_PERSISTENT_TABLE_REST
