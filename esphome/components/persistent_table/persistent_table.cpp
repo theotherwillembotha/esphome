@@ -205,18 +205,33 @@ void PersistentTableBase::handleRequest(AsyncWebServerRequest *request) {
     return;
   }
 
-  static const char PREFIX[] = "/api/table/";
-  static const size_t PREFIX_LEN = sizeof(PREFIX) - 1;
-  const char *after_id = url_buf + PREFIX_LEN + strlen(this->table_id_);
-
   switch (request->method()) {
     case HTTP_GET:
       this->rest_get_all_(request);
       break;
 
     case HTTP_POST: {
-      bool ok = this->rest_post_body_(this->body_buf_.c_str());
+      // On ESP-IDF the web server only calls handleBody() for
+      // application/x-www-form-urlencoded.  For application/json we must read
+      // the body ourselves via the underlying IDF request handle.
+      std::string json_body;
+      httpd_req_t *raw_req = static_cast<httpd_req_t *>(*request);
+      size_t content_len = raw_req->content_len;
+      if (content_len > 0 && content_len <= 4096) {
+        json_body.resize(content_len);
+        int ret = httpd_req_recv(raw_req, &json_body[0], static_cast<int>(content_len));
+        if (ret > 0) {
+          json_body.resize(static_cast<size_t>(ret));
+        } else {
+          json_body.clear();
+        }
+      }
+      // Fallback: body accumulated via handleBody() (Arduino/non-IDF path).
+      if (json_body.empty() && !this->body_buf_.empty()) {
+        json_body = std::move(this->body_buf_);
+      }
       this->body_buf_.clear();
+      bool ok = !json_body.empty() && this->rest_post_body_(json_body.c_str());
       if (ok) {
         request->send(200, "application/json", "{\"status\":\"ok\"}");
       } else {
@@ -224,19 +239,6 @@ void PersistentTableBase::handleRequest(AsyncWebServerRequest *request) {
       }
       break;
     }
-
-    case HTTP_DELETE:
-      if (*after_id == '/') {
-        const char *key_str = after_id + 1;
-        if (this->rest_delete_key_(key_str)) {
-          request->send(200, "application/json", "{\"status\":\"ok\"}");
-        } else {
-          request->send(404, "application/json", "{\"error\":\"not found\"}");
-        }
-      } else {
-        request->send(400, "application/json", "{\"error\":\"key required in URL\"}");
-      }
-      break;
 
     default:
       request->send(405, "text/plain", "Method Not Allowed");

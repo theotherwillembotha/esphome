@@ -122,8 +122,10 @@ class PersistentTableBase : public Component
 
   // Implemented by the generated subclass for type-specific serialization.
   virtual void rest_get_all_(AsyncWebServerRequest *request) = 0;
+  // Handles both upsert and delete.  Delete is triggered by {"_delete":true}
+  // in the JSON body because ESP-IDF's httpd does not register a DELETE method
+  // handler, so we cannot use the HTTP DELETE verb.
   virtual bool rest_post_body_(const char *json_body) = 0;
-  virtual bool rest_delete_key_(const char *key_str) = 0;
   // Returns a pointer to the compile-time HTML UI page (stored in flash).
   virtual const char *get_ui_html_() const = 0;
 

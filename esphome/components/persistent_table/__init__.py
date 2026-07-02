@@ -229,69 +229,52 @@ def _generate_rest_get(struct_name: str, columns: list) -> str:
 
 
 def _generate_rest_post(struct_name: str, columns: list) -> str:
-    lines = [
-        f"    {struct_name} row{{}};",
-        "    DynamicJsonDocument doc(512);",
-        "    if (deserializeJson(doc, json_body) != DeserializationError::Ok) return false;",
-    ]
     key_col = next(c for c in columns if c.get(CONF_KEY, False))
-    lines.append(f'    if (!doc.containsKey("{key_col[CONF_NAME]}")) return false;')
+    key = key_col[CONF_NAME]
 
-    for col in columns:
+    def _extract_col(col):
         name = col[CONF_NAME]
-        col_type = col["type"]
+        ct = col["type"]
         default = col.get(CONF_DEFAULT)
-
-        if col_type == "string":
+        if ct == "string":
             default_val = f'"{default}"' if default is not None else '""'
-            lines += [
+            return [
                 "    {",
                 f'      const char *v = doc["{name}"] | {default_val};',
                 f"      strncpy(row.{name}, v, sizeof(row.{name}) - 1);",
                 f"      row.{name}[sizeof(row.{name}) - 1] = '\\0';",
                 "    }",
             ]
-        elif col_type == "bool":
+        if ct == "bool":
             default_val = "true" if default else "false"
-            lines.append(f'    row.{name} = doc["{name}"] | {default_val};')
-        elif col_type == "float":
+            return [f'    row.{name} = doc["{name}"] | {default_val};']
+        if ct == "float":
             default_val = str(float(default)) if default is not None else "0.0f"
-            lines.append(f'    row.{name} = doc["{name}"] | {default_val};')
-        else:
-            cpp_type = COLUMN_TYPES[col_type][0]
-            default_val = str(int(default)) if default is not None else "0"
-            lines.append(
-                f'    row.{name} = doc["{name}"] | ({cpp_type}) {default_val};'
-            )
+            return [f'    row.{name} = doc["{name}"] | {default_val};']
+        cpp_type = COLUMN_TYPES[ct][0]
+        default_val = str(int(default)) if default is not None else "0"
+        return [f'    row.{name} = doc["{name}"] | ({cpp_type}) {default_val};']
 
+    lines = [
+        f"    {struct_name} row{{}};",
+        "    DynamicJsonDocument doc(512);",
+        "    if (deserializeJson(doc, json_body) != DeserializationError::Ok) return false;",
+        f'    if (!doc.containsKey("{key}")) return false;',
+    ]
+    # Extract the key first so the _delete branch can pass it to remove().
+    lines += _extract_col(key_col)
+    # _delete:true in the body means delete the row identified by the key.
+    lines.append(f'    if (doc["_delete"] | false) return this->remove(row.{key});')
+    # Extract remaining (non-key) columns.
+    for col in columns:
+        if col[CONF_NAME] == key:
+            continue
+        lines += _extract_col(col)
     lines.append("    return this->upsert(row);")
     body = "\n".join(lines)
     return f"""\
   bool rest_post_body_(const char *json_body) override {{
 {body}
-  }}"""
-
-
-def _generate_rest_delete(key_col: dict) -> str:
-    key = key_col[CONF_NAME]
-    col_type = key_col["type"]
-    if col_type == "string":
-        parse = f"    return this->remove(key_str);"
-    elif col_type in ("uint8", "uint16", "uint32"):
-        cpp_type = COLUMN_TYPES[col_type][0]
-        parse = (
-            f"    {cpp_type} key = static_cast<{cpp_type}>(strtoul(key_str, nullptr, 0));\n"
-            f"    return this->remove(key);"
-        )
-    else:
-        cpp_type = COLUMN_TYPES[col_type][0]
-        parse = (
-            f"    {cpp_type} key = static_cast<{cpp_type}>(strtol(key_str, nullptr, 0));\n"
-            f"    return this->remove(key);"
-        )
-    return f"""\
-  bool rest_delete_key_(const char *key_str) override {{
-{parse}
   }}"""
 
 
@@ -423,7 +406,9 @@ _UI_HTML_TEMPLATE = (
     '}'
     'function del(key){'
     'if(!confirm("Delete "+key+"?"))return;'
-    'fetch("/api/table/___TID___/"+key,{method:"DELETE"})'
+    'var b={};b[K.name]=key;b["_delete"]=true;'
+    'fetch("/api/table/___TID___",{method:"POST",'
+    'headers:{"Content-Type":"application/json"},body:JSON.stringify(b)})'
     '.then(function(r){if(r.ok){load();st("Deleted",1);}else st("Delete failed",0);});'
     '}'
     'function st(m,ok){'
@@ -519,10 +504,8 @@ struct {struct_name} {{
 #ifdef USE_PERSISTENT_TABLE_REST
   // REST: GET /api/table/{table_id_str}
 {_generate_rest_get(struct_name, columns)}
-  // REST: POST /api/table/{table_id_str}  (body: JSON object)
+  // REST: POST /api/table/{table_id_str}  (upsert or delete via _delete:true)
 {_generate_rest_post(struct_name, columns)}
-  // REST: DELETE /api/table/{table_id_str}/{{key}}
-{_generate_rest_delete(key_col)}
   // UI: GET /table/{table_id_str}  — HTML editor page stored in flash
   const char *get_ui_html_() const override {{
     static const char HTML[] = {ui_html};
